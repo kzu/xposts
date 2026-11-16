@@ -90,7 +90,7 @@ export const ARTIFACTS = {
   xApi: "x-api.json",
   /** The X API response headers of that request. */
   xApiHeaders: "x-api-headers.json",
-  /** The x.com page the renderer resolved the post from, byte for byte. */
+  /** The x.com page the renderer resolved the post from. */
   xPage: "x-page.html",
   /** The exact renderer input: re-rendering it reproduces the PNG. */
   xeetInput: "xeet-input.json",
@@ -131,8 +131,8 @@ export interface Manifest {
 }
 
 export interface Fingerprint {
-  /** Creation time encoded in the post id (a snowflake), which the author cannot choose. */
-  snowflakeTime: string;
+  /** Creation time encoded in the post id (a snowflake), which the author cannot choose. Null for ids older than snowflakes. */
+  snowflakeTime: string | null;
   /** `created_at` as the X API reported it. */
   apiCreatedAt: string | null;
   /** Whether the two agree to the second. */
