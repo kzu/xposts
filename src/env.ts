@@ -1,4 +1,4 @@
-import type { Env } from "./types";
+import type { Env } from "./types.js";
 
 /** The settings of this deployment, from environment variables. */
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {

@@ -5,10 +5,10 @@
 
 import { createHash } from "node:crypto";
 
-import { CaptureError, type SaveRequest } from "./deps";
-import { getRenderer, RENDER_OPTIONS, type Post, type Renderer } from "./render/xeet";
-import { excerptOf, normalizeUsername, type Store } from "./store";
-import type { Env, Fingerprint, Save, SaveRecord } from "./types";
+import { CaptureError, type SaveRequest } from "./deps.js";
+import { getRenderer, RENDER_OPTIONS, type Post, type Renderer } from "./render/xeet.js";
+import { excerptOf, normalizeUsername, type Store } from "./store.js";
+import type { Env, Fingerprint, Save, SaveRecord } from "./types.js";
 import {
   apiText,
   isReadConfigured,
@@ -18,7 +18,7 @@ import {
   snowflakeTime,
   XApiError,
   type XApiCapture,
-} from "./x";
+} from "./x/index.js";
 
 /** The outside world a save touches, replaceable in tests. */
 export interface Services {

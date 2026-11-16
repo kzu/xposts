@@ -1,7 +1,7 @@
 // Reading one post with app-only auth, keeping the response as evidence.
 
-import type { Env } from "../types";
-import { API_ORIGIN, type FetchImpl, problemDetail, send, XApiError, type XApiPostResponse } from "./api";
+import type { Env } from "../types.js";
+import { API_ORIGIN, type FetchImpl, problemDetail, send, XApiError, type XApiPostResponse } from "./api.js";
 
 type FieldSet = Record<"tweet.fields" | "expansions" | "user.fields" | "media.fields", readonly string[]>;
 

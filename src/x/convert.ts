@@ -1,9 +1,9 @@
 // The renderer's input built from an X API response, for when x.com's page
 // cannot be fetched and xeet cannot resolve the post itself.
 
-import type { Post } from "../render/xeet";
-import type { XApiIncludes, XApiMedia, XApiPostResponse, XApiTweet, XApiUser } from "./api";
-import { apiText } from "./text";
+import type { Post } from "../render/xeet.js";
+import type { XApiIncludes, XApiMedia, XApiPostResponse, XApiTweet, XApiUser } from "./api.js";
+import { apiText } from "./text.js";
 
 type Author = NonNullable<Post["author"]>;
 type Media = NonNullable<Post["media"]>[number];

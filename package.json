@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "tsx --env-file=.env.local dev.ts"
+    "dev": "tsx --env-file=.env.local dev.ts",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --packages=external --jsx=automatic --jsx-import-source=hono/jsx --outfile=dist/main.js"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.34.0",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@hono/node-server": "^2.1.8",
     "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

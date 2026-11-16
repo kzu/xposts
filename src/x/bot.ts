@@ -1,10 +1,10 @@
 // The bot account: reading its mentions and replying to them, signed with
 // OAuth 1.0a.
 
-import type { Env } from "../types";
-import { API_ORIGIN, type FetchImpl, sendJson, type XApiIncludes, type XApiProblem, type XApiTweet } from "./api";
-import { botCredentials, oauth1Header } from "./oauth1";
-import { type PostRef, parsePostRef } from "./ref";
+import type { Env } from "../types.js";
+import { API_ORIGIN, type FetchImpl, sendJson, type XApiIncludes, type XApiProblem, type XApiTweet } from "./api.js";
+import { botCredentials, oauth1Header } from "./oauth1.js";
+import { type PostRef, parsePostRef } from "./ref.js";
 
 /** Whether the bearer token for reading posts is set. */
 export function isReadConfigured(env: Env): boolean {

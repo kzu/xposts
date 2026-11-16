@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import { requireSession } from "../auth";
-import { CaptureError, type Deps } from "../deps";
-import { savePath, shortPath } from "../types";
-import type { AppEnv, FileKind, Save, SaveRecord, SaveRef } from "../types";
-import { parsePostRef, postUrl } from "../x/ref";
-import { Time, formatTime, notFoundPage, page } from "./layout";
+import { requireSession } from "../auth/index.js";
+import { CaptureError, type Deps } from "../deps.js";
+import { savePath, shortPath } from "../types.js";
+import type { AppEnv, FileKind, Save, SaveRecord, SaveRef } from "../types.js";
+import { parsePostRef, postUrl } from "../x/ref.js";
+import { Time, formatTime, notFoundPage, page } from "./layout.js";
 
 const POST_ID = /^\d{1,20}$/;
 const HANDLE = /^[A-Za-z0-9_]{1,15}$/;

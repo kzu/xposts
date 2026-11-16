@@ -2,10 +2,10 @@
 
 import { Hono } from "hono";
 
-import type { Deps } from "./deps";
-import { pollMentions } from "./mentions";
-import { RENDER_OPTIONS } from "./render/xeet";
-import { savePath, type AppEnv } from "./types";
+import type { Deps } from "./deps.js";
+import { pollMentions } from "./mentions.js";
+import { RENDER_OPTIONS } from "./render/xeet.js";
+import { savePath, type AppEnv } from "./types.js";
 
 export function createApi(deps: Deps): Hono<AppEnv> {
   const api = new Hono<AppEnv>();

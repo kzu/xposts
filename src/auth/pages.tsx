@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 
-import type { AppEnv } from "../types";
-import { page } from "../web/layout";
+import type { AppEnv } from "../types.js";
+import { page } from "../web/layout.js";
 
 export function notConfiguredPage(c: Context<AppEnv>, missing: string[]) {
   return page(

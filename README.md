@@ -92,8 +92,8 @@ is what this code produces from the stored data.
 
 ## Architecture
 
-One Vercel function ([api/index.ts](api/index.ts)) serves everything; Azure Blob Storage is the
-only store.
+One Vercel function ([api/index.js](api/index.js)) serves everything, from a bundle that
+`npm run build` makes of [src/main.ts](src/main.ts); Azure Blob Storage is the only store.
 
 | Part | Code |
 | --- | --- |

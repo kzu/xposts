@@ -1,8 +1,8 @@
 // What the routes are built from, so tests can supply their own.
 
-import type { Store } from "./store";
-import type { Save } from "./types";
-import type { PostRef } from "./x/ref";
+import type { Store } from "./store.js";
+import type { Save } from "./types.js";
+import type { PostRef } from "./x/ref.js";
 
 export interface SaveRequest {
   post: PostRef;

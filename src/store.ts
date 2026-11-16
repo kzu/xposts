@@ -1,7 +1,7 @@
 // The archive's store. Everything lives in Azure Blob Storage (src/azure.ts);
 // tests use an in-memory store with the same behaviour (test/memory-store.ts).
 
-import type { FileKind, Save, SaveRef } from "./types";
+import type { FileKind, Save, SaveRef } from "./types.js";
 
 /** What the archive supplies for a new save; the store adds what Azure states about the blob. */
 export type NewSave = Omit<Save, "blob">;

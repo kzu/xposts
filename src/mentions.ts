@@ -1,9 +1,9 @@
 // Mentions of the bot account: each one that points at a post asks for a save,
 // and is answered with the image and the link.
 
-import { CaptureError, type Deps } from "./deps";
-import { savePath, type Env, type Save } from "./types";
-import { fetchMentions, isBotConfigured, replyText, replyWithImage, type Mention } from "./x";
+import { CaptureError, type Deps } from "./deps.js";
+import { savePath, type Env, type Save } from "./types.js";
+import { fetchMentions, isBotConfigured, replyText, replyWithImage, type Mention } from "./x/index.js";
 
 const SINCE_KEY = "mentions.since_id";
 

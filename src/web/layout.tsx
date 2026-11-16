@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { Child } from "hono/jsx";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
-import type { AppEnv, Session } from "../types";
+import type { AppEnv, Session } from "../types.js";
 
 // One stylesheet, inlined: no build step and no second request. Text is set in
 // a serif to read as a document; controls and metadata use the system sans.

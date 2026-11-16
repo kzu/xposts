@@ -1,7 +1,7 @@
 // OAuth 1.0a request signing (RFC 5849, HMAC-SHA1), as X requires for
 // requests made on behalf of the bot account.
 
-import type { Env } from "../types";
+import type { Env } from "../types.js";
 
 export interface OAuth1Credentials {
   consumerKey: string;

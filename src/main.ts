@@ -1,9 +1,9 @@
 // The archive, assembled from the environment: what both the Vercel function and the local server run.
 
-import { createApp } from "./app";
-import { azureStore } from "./azure";
-import { createSaver } from "./capture";
-import { loadEnv } from "./env";
+import { createApp } from "./app.js";
+import { azureStore } from "./azure.js";
+import { createSaver } from "./capture.js";
+import { loadEnv } from "./env.js";
 
 const env = loadEnv();
 const store = azureStore(env.AZURE_STORAGE_CONNECTION_STRING);

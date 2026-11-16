@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 
-import { createApi } from "./api";
-import { auth, sessionMiddleware } from "./auth";
-import type { Deps } from "./deps";
-import type { AppEnv } from "./types";
-import { createWeb, notFound } from "./web";
+import { createApi } from "./api.js";
+import { auth, sessionMiddleware } from "./auth/index.js";
+import type { Deps } from "./deps.js";
+import type { AppEnv } from "./types.js";
+import { createWeb, notFound } from "./web/index.js";
 
 export function createApp(deps: Deps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();

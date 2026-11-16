@@ -1,7 +1,7 @@
 // The text of a post as X displays it, from the API's representation.
 
-import type { XApiTweet, XApiUrlEntity } from "./api";
-import { parsePostRef } from "./ref";
+import type { XApiTweet, XApiUrlEntity } from "./api.js";
+import { parsePostRef } from "./ref.js";
 
 function unescapeHtml(text: string): string {
   // &amp; last, so "&amp;lt;" becomes "&lt;" and not "<".

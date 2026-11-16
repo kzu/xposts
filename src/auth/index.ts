@@ -5,8 +5,8 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { SignJWT, createLocalJWKSet, jwtVerify } from "jose";
 import type { JSONWebKeySet } from "jose";
 
-import type { AppEnv, Env, Session } from "../types";
-import { notConfiguredPage, signInErrorPage } from "./pages";
+import type { AppEnv, Env, Session } from "../types.js";
+import { notConfiguredPage, signInErrorPage } from "./pages.js";
 
 export const SESSION_COOKIE = "xposts_session";
 const LOGIN_COOKIE = "xposts_login";

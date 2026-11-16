@@ -14,8 +14,8 @@ import {
   type ContainerClient,
 } from "@azure/storage-blob";
 
-import { normalizeUsername, type NewSave, type SaveFiles, type Store } from "./store";
-import { FILES, type BlobProof, type FileKind, type Save, type SaveRef } from "./types";
+import { normalizeUsername, type NewSave, type SaveFiles, type Store } from "./store.js";
+import { FILES, type BlobProof, type FileKind, type Save, type SaveRef } from "./types.js";
 
 export const SAVES_CONTAINER = "saves";
 export const STATE_CONTAINER = "state";
