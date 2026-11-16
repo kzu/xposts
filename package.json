@@ -1,0 +1,31 @@
+{
+  "name": "xposts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A verifiable archive of X posts: rendered with xeet, stored on Cloudflare, anchored on Algorand.",
+  "license": "MIT",
+  "scripts": {
+    "prepare-xeet": "node scripts/prepare-xeet.mjs",
+    "postinstall": "node scripts/prepare-xeet.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply xposts --local",
+    "db:migrate": "wrangler d1 migrations apply xposts --remote",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@xeet/core": "0.1.0",
+    "algosdk": "^3.9.0",
+    "hono": "^4.13.18",
+    "jose": "^6.2.17"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.8.2",
+    "@cloudflare/workers-types": "^5.20261116.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.162.0"
+  }
+}
