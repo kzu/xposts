@@ -1,15 +1,14 @@
 // Shared contracts. Modules depend on these types, not on each other.
 
+/** Settings, read from the process environment (src/env.ts). */
 export interface Env {
-  DB: D1Database;
-  BUCKET: R2Bucket;
-  ASSETS: Fetcher;
-  ARCHIVE_QUEUE: Queue<ArchiveJob>;
-
   /** Origin the archive is served from, without a trailing slash. */
   PUBLIC_URL: string;
   /** Where the source code of this deployment lives. */
   REPO_URL: string;
+
+  // Azure Blob Storage: the only store. Saves live in a container anyone can read and list.
+  AZURE_STORAGE_CONNECTION_STRING?: string;
 
   // Auth0 (regular web application). Sign-in is required to submit a post.
   AUTH0_DOMAIN?: string;
@@ -30,83 +29,75 @@ export interface Env {
   /** Handle of the bot account, without "@". */
   X_BOT_HANDLE: string;
 
-  // Algorand. Without a mnemonic, captures are stored but not anchored.
-  ALGORAND_NETWORK: AlgorandNetwork;
-  ALGORAND_MNEMONIC?: string;
-  ALGOD_URL?: string;
-  INDEXER_URL?: string;
+  /** What the scheduler that polls mentions must present as a bearer token. */
+  CRON_SECRET?: string;
 }
 
-export type AlgorandNetwork = "mainnet" | "testnet";
-
-/** A capture is identified by the post and the UTC time it was taken (YYYYMMDDHHmmss). */
-export interface CaptureRef {
+/** A saved post is identified by its author's handle, lower-cased, and the post id. */
+export interface SaveRef {
+  username: string;
   postId: string;
-  ts: string;
 }
 
-export interface ArchiveJob extends CaptureRef {
-  /** Set when a mention asked for the capture: the bot replies to it when done. */
-  mention?: { id: string; authorHandle: string };
+/**
+ * What Azure Blob Storage itself states about the stored image. The archive
+ * cannot set these values: they are the proof of when the save was made.
+ */
+export interface BlobProof {
+  /** Public URL of the image blob. Anyone can `curl -I` it and read the same values. */
+  url: string;
+  /** `x-ms-creation-time`: when Azure created the blob. */
+  createdOn: string;
+  /** `Last-Modified`: equal to `createdOn` for a blob that was never rewritten. */
+  lastModified: string;
+  etag: string;
+  /** `Content-MD5` of the image, base64, computed by Azure on upload. */
+  contentMd5: string | null;
 }
 
-export type CaptureStatus = "pending" | "done" | "failed";
-
-export interface Capture extends CaptureRef {
-  status: CaptureStatus;
-  error: string | null;
-  source: "web" | "mention";
-  requestedBy: string;
-  mentionId: string | null;
-  replyId: string | null;
-  authorHandle: string | null;
+/** A saved post, as lists and pages show it. Stored as the metadata of the image blob. */
+export interface Save extends SaveRef {
+  /** The author's handle as X writes it. */
+  handle: string;
   authorName: string | null;
-  text: string | null;
+  /** The start of the text; the whole text is in the record. */
+  excerpt: string;
   postedAt: string | null;
-  capturedAt: string | null;
-  pngSha256: string | null;
-  manifestSha256: string | null;
-  width: number | null;
-  height: number | null;
-  anchorNetwork: AlgorandNetwork | null;
-  anchorTxid: string | null;
-  anchorRound: number | null;
-  createdAt: string;
+  /** When the archive took the save, by its own clock. */
+  capturedAt: string;
+  /** Hex SHA-256 of the image. */
+  pngSha256: string;
+  /** Hex SHA-256 of record.json. */
+  recordSha256: string;
+  /** Size of the image in pixels. */
+  width: number;
+  height: number;
+  source: "web" | "mention";
+  blob: BlobProof;
 }
 
-/** One stored file of a capture. */
-export interface Artifact {
-  /** File name under the capture's R2 prefix, e.g. "post.png". */
-  name: string;
-  contentType: string;
-  bytes: number;
-  sha256: string;
-}
-
-export const ARTIFACTS = {
+/** The files of a save, next to each other in the container: `<username>/<post id><suffix>`. */
+export const FILES = {
   /** The rendered post. */
-  png: "post.png",
+  png: ".png",
+  /** What is known about the save: the whole text, hashes, what X stated. */
+  record: ".json",
   /** The X API response body, byte for byte. */
-  xApi: "x-api.json",
-  /** The X API response headers of that request. */
-  xApiHeaders: "x-api-headers.json",
-  /** The x.com page the renderer resolved the post from. */
-  xPage: "x-page.html",
-  /** The exact renderer input: re-rendering it reproduces the PNG. */
-  xeetInput: "xeet-input.json",
-  /** Hashes of everything above, plus what is known about the capture. */
-  manifest: "manifest.json",
+  xApi: ".x-api.json",
+  /** The exact renderer input: rendering it again reproduces the image. */
+  xeetInput: ".xeet-input.json",
 } as const;
 
-/** What a capture's manifest.json holds. Its SHA-256 is what goes on chain. */
-export interface Manifest {
-  schema: "xposts/manifest/v1";
+export type FileKind = keyof typeof FILES;
+
+/** The record.json of a save. */
+export interface SaveRecord {
+  schema: "xposts/save/v1";
   postId: string;
-  ts: string;
   url: string;
   capturedAt: string;
   post: {
-    authorHandle: string | null;
+    handle: string;
     authorName: string | null;
     text: string;
     postedAt: string | null;
@@ -126,7 +117,8 @@ export interface Manifest {
   };
   /** What X itself said about the post at capture time. */
   fingerprint: Fingerprint;
-  artifacts: Artifact[];
+  /** Hex SHA-256 of the other files of the save. */
+  files: { png: string; xeetInput: string; xApi?: string };
   warnings: string[];
 }
 
@@ -145,24 +137,6 @@ export interface Fingerprint {
   pageAppVersion: string | null;
 }
 
-/** What is written to the Algorand transaction note. */
-export interface AnchorRecord {
-  postId: string;
-  ts: string;
-  /** Hex SHA-256 of post.png. */
-  png: string;
-  /** Hex SHA-256 of manifest.json. */
-  manifest: string;
-  /** Public URL of the capture. */
-  url: string;
-}
-
-export interface Anchor {
-  network: AlgorandNetwork;
-  txId: string;
-  round: number;
-}
-
 /** A session established through Auth0. */
 export interface Session {
   sub: string;
@@ -170,16 +144,18 @@ export interface Session {
   picture?: string;
 }
 
-export function captureKey(ref: CaptureRef, name: string): string {
-  return `captures/${ref.postId}/${ref.ts}/${name}`;
-}
-
-export function captureUrl(env: Pick<Env, "PUBLIC_URL">, ref: CaptureRef): string {
-  return `${env.PUBLIC_URL}/p/${ref.postId}/${ref.ts}`;
-}
-
 /** The Hono environment every route shares. `session` is set by the auth middleware. */
 export interface AppEnv {
   Bindings: Env;
   Variables: { session: Session | null };
+}
+
+/** The page of a save. */
+export function savePath(ref: SaveRef): string {
+  return `/${ref.username}/${ref.postId}`;
+}
+
+/** The address that redirects to the image itself. */
+export function shortPath(ref: SaveRef): string {
+  return `/s/${ref.username}/${ref.postId}`;
 }

@@ -172,7 +172,7 @@ async function uploadPng(env: Env, png: Uint8Array, altText: string | undefined,
   for (let offset = 0, index = 0; offset < png.length; offset += CHUNK_BYTES, index++) {
     const form = new FormData();
     form.append("segment_index", String(index));
-    form.append("media", new Blob([png.subarray(offset, offset + CHUNK_BYTES)], { type: "image/png" }), "post.png");
+    form.append("media", new Blob([png.slice(offset, offset + CHUNK_BYTES).buffer], { type: "image/png" }), "post.png");
     await signedJson(env, `uploading media segment ${index}`, "POST", `${base}/${mediaId}/append`, { multipart: form }, fetchImpl);
   }
 
