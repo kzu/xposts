@@ -1,4 +1,3 @@
-import { env } from "cloudflare:test";
 import { Hono } from "hono";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { describe, expect, it } from "vitest";
@@ -8,8 +7,9 @@ import type { AppEnv, Env } from "../src/types";
 
 const DOMAIN = "tenant.example.auth0.com";
 const testEnv: Env = {
-  ...env,
   PUBLIC_URL: "https://xposts.test",
+  REPO_URL: "https://github.com/example/xposts",
+  X_BOT_HANDLE: "SaveXPosts",
   AUTH0_DOMAIN: DOMAIN,
   AUTH0_CLIENT_ID: "client-1",
   AUTH0_CLIENT_SECRET: "client-secret",
@@ -84,7 +84,7 @@ describe("session cookie", () => {
 
 describe("safeReturnTo", () => {
   it("keeps paths of this site", () => {
-    expect(safeReturnTo("/p/1/20260101000000")).toBe("/p/1/20260101000000");
+    expect(safeReturnTo("/ada/1")).toBe("/ada/1");
     expect(safeReturnTo("/verify?a=b#c")).toBe("/verify?a=b#c");
   });
 

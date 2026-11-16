@@ -1,91 +1,111 @@
-import { env } from "cloudflare:test";
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { auth, createSessionToken, SESSION_COOKIE, sessionMiddleware } from "../src/auth";
-import { completeCapture, failCapture, getCapture, setAnchor } from "../src/db";
-import type { AppEnv, ArchiveJob, Env } from "../src/types";
-import { notFound, web } from "../src/web";
+import { CaptureError, type Deps, type SaveRequest } from "../src/deps";
+import { excerptOf } from "../src/store";
+import type { AppEnv, Env, SaveRecord } from "../src/types";
+import { createWeb, notFound } from "../src/web";
+import { memoryStore } from "./memory-store";
 
-const sent: ArchiveJob[] = [];
 const testEnv: Env = {
-  ...env,
   PUBLIC_URL: "https://xposts.test",
+  REPO_URL: "https://github.com/example/xposts",
+  X_BOT_HANDLE: "SaveXPosts",
   SESSION_SECRET: "a-long-random-secret-for-tests-only",
-  ARCHIVE_QUEUE: { send: async (job: ArchiveJob) => void sent.push(job) } as unknown as Queue<ArchiveJob>,
+};
+
+const store = memoryStore();
+const requests: SaveRequest[] = [];
+let nextError: CaptureError | null = null;
+
+const deps: Deps = {
+  store,
+  async save(request) {
+    requests.push(request);
+    if (nextError) throw nextError;
+    return seed(request.post.handle ?? "ada", request.post.id);
+  },
 };
 
 const app = new Hono<AppEnv>();
 app.use("*", sessionMiddleware);
 app.route("/", auth);
-app.route("/", web);
+app.route("/", createWeb(deps));
 app.notFound(notFound);
 
 const call = (path: string, init?: RequestInit) => app.request(path, init, testEnv);
 
-async function signedIn(extra: Record<string, string> = {}) {
+async function signedIn() {
   const token = await createSessionToken(testEnv, { sub: "auth0|ada", name: "Ada" });
-  return { cookie: `${SESSION_COOKIE}=${token}`, ...extra };
+  return { cookie: `${SESSION_COOKIE}=${token}` };
 }
 
-async function insert(postId: string, ts: string, createdAt = "2026-11-16T10:00:00.000Z") {
-  await env.DB.prepare("INSERT INTO captures (post_id, ts, source, requested_by, created_at) VALUES (?, ?, 'web', 'x', ?)")
-    .bind(postId, ts, createdAt)
-    .run();
-  return { postId, ts };
+const TEXT = "Hello <script>alert(1)</script> world\nsecond line, the whole text";
+const encoder = new TextEncoder();
+
+async function seed(handle: string, postId: string, options: { xApi?: boolean; record?: boolean; warnings?: string[] } = {}) {
+  const record: SaveRecord = {
+    schema: "xposts/save/v1",
+    postId,
+    url: `https://x.com/${handle}/status/${postId}`,
+    capturedAt: "2026-11-16T10:00:05.000Z",
+    post: { handle, authorName: "Ada <b>Lovelace</b>", text: TEXT, postedAt: "2026-11-15T09:00:00.000Z" },
+    renderer: { package: "@xeet/core", version: "0.1.0", upstream: "1", options: {} },
+    text: { source: "x-api", sourcesMatch: null },
+    fingerprint: { snowflakeTime: null, apiCreatedAt: null, timeConsistent: null, editHistory: null, apiHeaders: {}, pageAppVersion: null },
+    files: { png: "a".repeat(64), xeetInput: "c".repeat(64), ...(options.xApi ? { xApi: "d".repeat(64) } : {}) },
+    warnings: options.warnings ?? [],
+  };
+  return store.createSave(
+    {
+      username: handle.toLowerCase(),
+      postId,
+      handle,
+      authorName: "Ada <b>Lovelace</b>",
+      excerpt: excerptOf(TEXT),
+      postedAt: record.post.postedAt,
+      capturedAt: record.capturedAt,
+      pngSha256: "a".repeat(64),
+      recordSha256: "b".repeat(64),
+      width: 600,
+      height: 300,
+      source: "web",
+    },
+    {
+      png: encoder.encode("png"),
+      // An empty record stands for a missing one: readRecord cannot parse it.
+      record: options.record === false ? new Uint8Array() : encoder.encode(JSON.stringify(record)),
+      xeetInput: encoder.encode("{}"),
+      ...(options.xApi ? { xApi: encoder.encode("{}") } : {}),
+    },
+  );
 }
 
-const done = {
-  authorHandle: "ada",
-  authorName: "Ada <b>Lovelace</b>",
-  text: "Hello <script>alert(1)</script> world",
-  postedAt: "2026-11-15T09:00:00.000Z",
-  capturedAt: "2026-11-16T10:00:05.000Z",
-  pngSha256: "a".repeat(64),
-  manifestSha256: "b".repeat(64),
-  width: 600,
-  height: 300,
-};
-
-beforeEach(async () => {
-  sent.length = 0;
-  await env.DB.exec("DELETE FROM captures");
+beforeEach(() => {
+  store.saves.length = 0;
+  requests.length = 0;
+  nextError = null;
 });
 
-describe("pages", () => {
-  it("home page invites sign-in when signed out and shows recent captures", async () => {
-    const ref = await insert("100", "20261116100000");
-    await completeCapture(env.DB, ref, done);
+describe("home", () => {
+  it("invites sign-in when signed out and shows the latest saves as blob thumbnails", async () => {
+    const { save } = await seed("Ada", "100");
     const html = await (await call("/")).text();
     expect(html).toContain("Sign in to save a post");
     expect(html).toContain("@SaveXPosts");
-    expect(html).toContain("/p/100/20261116100000/post.png");
+    expect(html).toContain(`src="${save.blob.url}"`);
+    expect(html).toContain('href="/ada/100"');
+    expect(html).toContain("@Ada");
     expect(html).not.toContain("<script>alert(1)");
   });
 
-  it("home page shows the form when signed in", async () => {
+  it("shows the form when signed in", async () => {
     const html = await (await call("/", { headers: await signedIn() })).text();
     expect(html).toContain('action="/submit"');
     expect(html).toContain("Ada");
     expect(html).toContain("/auth/logout");
-  });
-
-  it("about, verify and unknown pages", async () => {
-    const about = await (await call("/about")).text();
-    expect(about).toContain("does <strong>not</strong> prove");
-    expect(about).toContain(env.REPO_URL);
-    expect((await call("/verify")).status).toBe(200);
-    const missing = await call("/nope");
-    expect(missing.status).toBe(404);
-    expect(await missing.text()).toContain("Not found");
-  });
-
-  it("lists the captures of an author", async () => {
-    const ref = await insert("100", "20261116100000");
-    await completeCapture(env.DB, ref, done);
-    expect((await call("/u/ADA")).status).toBe(200);
-    expect((await call("/u/nobody")).status).toBe(404);
-    expect((await call("/u/bad%20handle")).status).toBe(404);
+    expect(html).toContain("Nothing has been saved yet");
   });
 });
 
@@ -95,121 +115,204 @@ describe("POST /submit", () => {
     headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
     body: new URLSearchParams({ url }),
   });
+  const post = async (url: string) => call("/submit", form(url, { ...(await signedIn()), origin: "https://xposts.test" }));
 
   it("sends signed-out visitors to sign in", async () => {
     const response = await call("/submit", form("https://x.com/ada/status/100", { origin: "https://xposts.test" }));
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain("/auth/login");
-    expect(sent).toHaveLength(0);
+    expect(requests).toHaveLength(0);
   });
 
   it("refuses a request from another origin, or with none", async () => {
     const session = await signedIn();
     const wrong = await call("/submit", form("https://x.com/ada/status/100", { ...session, origin: "https://evil.test" }));
     expect(wrong.status).toBe(403);
-    const none = await call("/submit", form("https://x.com/ada/status/100", session));
-    expect(none.status).toBe(403);
-    expect(sent).toHaveLength(0);
+    expect((await call("/submit", form("https://x.com/ada/status/100", session))).status).toBe(403);
+    expect(requests).toHaveLength(0);
   });
 
   it("re-shows the form with an error for a URL that is not a post", async () => {
-    const response = await call("/submit", form("https://example.com/<b>", { ...(await signedIn()), origin: "https://xposts.test" }));
+    const response = await post("https://example.com/<b>");
     expect(response.status).toBe(400);
     const html = await response.text();
     expect(html).toContain("not a link to a post");
     expect(html).toContain("https://example.com/&lt;b&gt;");
-    expect(sent).toHaveLength(0);
+    expect(requests).toHaveLength(0);
   });
 
-  it("registers the capture, queues it and redirects to it", async () => {
-    const response = await call("/submit", form("https://x.com/ada/status/2122184794209714368?s=20", { ...(await signedIn()), origin: "https://xposts.test" }));
+  it("saves the post and redirects to its page", async () => {
+    const response = await post("https://x.com/Ada/status/2122184794209714368?s=20");
     expect(response.status).toBe(303);
-    const location = response.headers.get("location")!;
-    expect(location).toMatch(/^\/p\/2122184794209714368\/\d{14}$/);
-    const [, , postId, ts] = location.split("/");
-    const capture = await getCapture(env.DB, { postId: postId!, ts: ts! });
-    expect(capture).toMatchObject({ status: "pending", source: "web", requestedBy: "auth0|ada" });
-    expect(sent).toEqual([{ postId, ts }]);
+    expect(response.headers.get("location")).toBe("/ada/2122184794209714368");
+    expect(requests).toEqual([{ post: { id: "2122184794209714368", handle: "Ada" }, source: "web", requestedBy: "auth0|ada" }]);
+  });
+
+  it("re-shows the form with the message of a retryable failure as 502", async () => {
+    nextError = new CaptureError("X is busy <try later>", true);
+    const response = await post("https://x.com/ada/status/100");
+    expect(response.status).toBe(502);
+    const html = await response.text();
+    expect(html).toContain("X is busy &lt;try later&gt;");
+    expect(html).toContain('value="https://x.com/ada/status/100"');
+  });
+
+  it("answers 422 for a failure that retrying cannot fix", async () => {
+    nextError = new CaptureError("The post was deleted", false);
+    const response = await post("https://x.com/ada/status/100");
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("The post was deleted");
   });
 });
 
-describe("capture page", () => {
-  it("waits while pending, polling the API", async () => {
-    await insert("100", "20261116100000");
-    const html = await (await call("/p/100/20261116100000")).text();
-    expect(html).toContain("Saving this post");
-    expect(html).toContain('data-api="/api/captures/100/20261116100000"');
-    expect(html).toContain("http-equiv");
+describe("static pages", () => {
+  it("about states the proof and its limits", async () => {
+    const html = await (await call("/about")).text();
+    expect(html).toContain("does <strong>not</strong> prove");
+    expect(html).toContain("curl -I");
+    expect(html).toContain("Last-Modified");
+    expect(html).toContain(testEnv.REPO_URL);
+    expect(html).not.toMatch(/algorand/i);
   });
 
-  it("shows the post and the proof when done, escaping post text", async () => {
-    const ref = await insert("100", "20261116100000");
-    await completeCapture(env.DB, ref, done);
-    await env.BUCKET.put("captures/100/20261116100000/post.png", "png-bytes");
-    const html = await (await call("/p/100/20261116100000")).text();
-    expect(html).toContain("a".repeat(64));
-    expect(html).toContain("b".repeat(64));
-    expect(html).toContain("Not anchored");
-    expect(html).toContain('property="og:image" content="https://xposts.test/p/100/20261116100000/post.png"');
-    expect(html).toContain("https://x.com/ada/status/100");
-    expect(html).toContain("2026-11-15 09:00 UTC");
+  it("verify page loads", async () => {
+    const response = await call("/verify");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("/api/verify/");
+  });
+
+  it("unknown paths are 404", async () => {
+    const response = await call("/a/b/c/d");
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("Not found");
+  });
+});
+
+describe("/s/:username/:status", () => {
+  it("redirects permanently to the image blob, whatever the case of the handle", async () => {
+    const { save } = await seed("Ada", "100");
+    for (const path of ["/s/ada/100", "/s/ADA/100"]) {
+      const response = await call(path);
+      expect(response.status).toBe(308);
+      expect(response.headers.get("location")).toBe(save.blob.url);
+    }
+  });
+
+  it("is 404 when the post is not saved or the reference is malformed", async () => {
+    expect((await call("/s/ada/100")).status).toBe(404);
+    expect((await call("/s/ada/abc")).status).toBe(404);
+    expect((await call("/s/bad%20handle/100")).status).toBe(404);
+  });
+});
+
+describe("/:username", () => {
+  it("lists the saves of an author, newest post first", async () => {
+    await seed("Ada", "100");
+    await seed("Ada", "200");
+    await seed("bob", "300");
+    const response = await call("/ADA");
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("@Ada");
+    expect(html).toContain("https://x.com/Ada");
+    expect(html.indexOf('href="/ada/200"')).toBeLessThan(html.indexOf('href="/ada/100"'));
+    expect(html).not.toContain("/bob/300");
+  });
+
+  it("shows an empty state, with the form, instead of a 404", async () => {
+    const response = await call("/nobody", { headers: await signedIn() });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("No posts by @nobody");
+    expect(html).toContain('action="/submit"');
+  });
+
+  it("is 404 for an invalid handle", async () => {
+    expect((await call("/bad%20handle")).status).toBe(404);
+    expect((await call("/this_handle_is_too_long")).status).toBe(404);
+  });
+
+  it("never treats a fixed name as a handle", async () => {
+    await seed("api", "100");
+    await seed("s", "100");
+    for (const path of ["/api", "/s", "/auth", "/submit", "/api/100", "/s/100", "/verify/100", "/about/100"]) {
+      expect((await call(path)).status, path).toBe(404);
+    }
+    // The fixed pages still win over handles.
+    expect((await call("/about")).status).toBe(200);
+    expect((await call("/verify")).status).toBe(200);
+  });
+});
+
+describe("/:username/:status", () => {
+  it("shows the image, the whole text from the record and the proof", async () => {
+    const { save } = await seed("Ada", "100", { xApi: true });
+    const html = await (await call("/ada/100")).text();
+    expect(html).toContain(`src="${save.blob.url}"`);
+    expect(html).toContain(`property="og:image" content="${save.blob.url}"`);
+    expect(html).toContain("second line, the whole text");
     expect(html).toContain("Hello &lt;script&gt;");
     expect(html).not.toContain("<script>alert(1)");
     expect(html).toContain("Ada &lt;b&gt;Lovelace&lt;/b&gt;");
-    // Only stored files are offered for download.
-    expect(html).toContain('href="/p/100/20261116100000/post.png" download');
-    expect(html).not.toContain("x-page.html");
+    expect(html).toContain("https://x.com/Ada/status/100");
+    expect(html).toContain("2026-11-15 09:00 UTC");
+    expect(html).toContain("2026-11-16 10:00 UTC");
+    expect(html).toContain('href="https://xposts.test/s/ada/100"');
+    // What Azure states, and the hashes.
+    for (const value of [save.blob.url, save.blob.createdOn, save.blob.lastModified, save.blob.contentMd5!, "a".repeat(64), "b".repeat(64)]) {
+      expect(html).toContain(value);
+    }
+    expect(html).toContain(save.blob.etag.replace(/"/g, "&quot;"));
+    expect(html).toContain(`curl -I ${save.blob.url}`);
+    // Downloads.
+    expect(html).toContain(`href="${store.fileUrl(save, "record")}"`);
+    expect(html).toContain(`href="${store.fileUrl(save, "xeetInput")}"`);
+    expect(html).toContain(`href="${store.fileUrl(save, "xApi")}"`);
   });
 
-  it("links the Algorand transaction when anchored", async () => {
-    const ref = await insert("100", "20261116100000");
-    await completeCapture(env.DB, ref, done);
-    await setAnchor(env.DB, ref, { network: "mainnet", txId: "TXID123", round: 4242 });
-    const html = await (await call("/p/100/20261116100000")).text();
-    expect(html).toContain("https://allo.info/tx/TXID123");
-    expect(html).toContain("round 4242");
-    expect(html).not.toContain("Not anchored");
+  it("lists the X API file only when the record has it", async () => {
+    const { save } = await seed("ada", "100");
+    const html = await (await call("/ada/100")).text();
+    expect(html).toContain(store.fileUrl(save, "xeetInput"));
+    expect(html).not.toContain(".x-api.json");
   });
 
-  it("shows the error and a way to retry when failed", async () => {
-    const ref = await insert("100", "20261116100000");
-    await failCapture(env.DB, ref, "X API answered 429 <rate limit>");
-    const signedOut = await (await call("/p/100/20261116100000")).text();
-    expect(signedOut).toContain("X API answered 429 &lt;rate limit&gt;");
-    expect(signedOut).toContain("Sign in to try again");
-    const html = await (await call("/p/100/20261116100000", { headers: await signedIn() })).text();
-    expect(html).toContain("Try again");
-    expect(html).toContain('name="url" value="100"');
+  it("falls back to the excerpt when the record is missing, and shows warnings", async () => {
+    await seed("ada", "100", { record: false });
+    const html = await (await call("/ada/100")).text();
+    expect(html).toContain("Hello &lt;script&gt;alert(1)");
+    await seed("ada", "101", { warnings: ["Text sources <differ>"] });
+    expect(await (await call("/ada/101")).text()).toContain("Text sources &lt;differ&gt;");
   });
 
-  it("answers 404 for unknown or malformed references", async () => {
-    expect((await call("/p/100/20261116100000")).status).toBe(404);
-    expect((await call("/p/abc/20261116100000")).status).toBe(404);
-    expect((await call("/p/100/1")).status).toBe(404);
+  it("is 404 with the save form prefilled when the post is not saved", async () => {
+    const response = await call("/ada/100", { headers: await signedIn() });
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain('value="https://x.com/ada/status/100"');
+  });
+
+  it("redirects to the lower-case path when the handle differs only by case", async () => {
+    await seed("Ada", "100");
+    const response = await call("/ADA/100");
+    expect(response.status).toBe(301);
+    expect(response.headers.get("location")).toBe("/ada/100");
+  });
+
+  it("is 404 for an invalid id", async () => {
+    expect((await call("/ada/abc")).status).toBe(404);
+    expect((await call(`/ada/${"1".repeat(21)}`)).status).toBe(404);
   });
 });
 
-describe("/p/:postId", () => {
-  it("is a 404 when the post has no captures", async () => {
-    expect((await call("/p/100")).status).toBe(404);
+describe("/:username/status/:status", () => {
+  it("redirects an x.com path to the page of the save", async () => {
+    const response = await call("/Ada/status/100");
+    expect(response.status).toBe(301);
+    expect(response.headers.get("location")).toBe("/ada/100");
   });
 
-  it("redirects to the capture when there is only one", async () => {
-    await insert("100", "20261116100000");
-    const response = await call("/p/100");
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("/p/100/20261116100000");
-  });
-
-  it("lists every capture, newest first", async () => {
-    const first = await insert("100", "20261116100000");
-    await completeCapture(env.DB, first, done);
-    await insert("100", "20261117100000");
-    const response = await call("/p/100");
-    expect(response.status).toBe(200);
-    const html = await response.text();
-    expect(html).toContain("2026-11-17 10:00 UTC");
-    expect(html).toContain("2026-11-16 10:00 UTC");
-    expect(html.indexOf("20261117100000")).toBeLessThan(html.indexOf("20261116100000"));
+  it("is 404 for an invalid id or handle", async () => {
+    expect((await call("/ada/status/abc")).status).toBe(404);
+    expect((await call("/api/status/100")).status).toBe(404);
   });
 });

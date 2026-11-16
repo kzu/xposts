@@ -20,5 +20,3 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      # Builds the Worker bundle without publishing it, so an oversized bundle fails here.
-      - run: npx wrangler deploy --dry-run --outdir dist

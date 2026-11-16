@@ -68,7 +68,6 @@ ul.plain li:last-child{border-bottom:1px solid var(--rule)}
 footer{border-top:1px solid var(--rule);font:.875rem var(--sans);color:var(--muted)}
 footer .wrap{padding-top:1rem;padding-bottom:2rem}
 @media (max-width:30rem){h1{font-size:1.65rem}.proof th{display:block;width:auto;padding-bottom:0;border-top:0}.proof td{display:block;padding-top:.1rem}.proof tr{display:block;border-top:1px solid var(--rule);padding:.4rem 0}}
-@media (prefers-reduced-motion:no-preference){.spinner{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.35}}}
 `;
 
 export interface PageOptions {
@@ -76,8 +75,6 @@ export interface PageOptions {
   description?: string;
   /** Extra <head> elements, such as Open Graph tags. */
   head?: Child;
-  /** Reload the page after this many seconds when scripts are off. */
-  refresh?: number;
   wide?: boolean;
   status?: ContentfulStatusCode;
 }
@@ -92,11 +89,6 @@ export function Layout(props: PageOptions & { session: Session | null; path: str
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{props.title === "xposts" ? "xposts" : `${props.title} · xposts`}</title>
         {props.description ? <meta name="description" content={props.description} /> : null}
-        {props.refresh ? (
-          <noscript>
-            <meta http-equiv="refresh" content={String(props.refresh)} />
-          </noscript>
-        ) : null}
         {props.head}
         <style dangerouslySetInnerHTML={{ __html: STYLE }} />
       </head>
@@ -128,7 +120,7 @@ export function Layout(props: PageOptions & { session: Session | null; path: str
         </main>
         <footer>
           <div class={props.wide ? "wrap wide" : "wrap"}>
-            A verifiable archive of X posts.{" "}
+            An archive of X posts.{" "}
             {props.repoUrl ? <a href={props.repoUrl}>Open source</a> : null}
           </div>
         </footer>
@@ -147,13 +139,14 @@ export function page(c: Context<AppEnv>, options: PageOptions, children: Child) 
   return c.html(html, options.status ?? 200);
 }
 
-export function notFoundPage(c: Context<AppEnv>, message = "There is nothing at this address.") {
+export function notFoundPage(c: Context<AppEnv>, message = "There is nothing at this address.", extra?: Child) {
   return page(
     c,
     { title: "Not found", status: 404 },
     <>
       <h1>Not found</h1>
       <p>{message}</p>
+      {extra}
       <p>
         <a href="/">Go to the archive</a>
       </p>
@@ -167,11 +160,6 @@ export function formatTime(iso: string | null): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
-}
-
-/** Capture time (YYYYMMDDHHmmss) as an ISO string. */
-export function tsToIso(ts: string): string {
-  return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(8, 10)}:${ts.slice(10, 12)}:${ts.slice(12, 14)}Z`;
 }
 
 export function Time(props: { iso: string | null }) {

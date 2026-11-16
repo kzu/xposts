@@ -1,20 +1,20 @@
-// The xeet renderer (https://github.com/rauchg/xeet) on Workers.
+// The xeet renderer (https://github.com/rauchg/xeet).
 //
 // xeet is a pure function from a post to PNG bytes: the same input and the
 // same xeet version always give the same bytes, which is what lets anyone
-// re-render a capture's `xeet-input.json` and compare hashes.
+// render a save's renderer input again and compare hashes.
 
-import { bind } from "@xeet/core";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+
+import { loadXeet } from "@xeet/core/node";
 import type { Post, RenderOptions, Report, Resolved } from "@xeet/core";
-
-import { createFontPacks, sha256Hex } from "./generated/fonts.js";
-import manifest from "./generated/packs.json";
-import { loadXeetWasm, XEET_VERSION } from "./generated/xeet-wasm.js";
 
 export type { Post, RenderOptions, Report, Resolved };
 
 /**
- * How every capture is rendered: the post's own page on x.com, light theme,
+ * How every save is rendered: the post's own page on x.com, light theme,
  * with "Show more" expanded so the whole text is in the image.
  */
 export const RENDER_OPTIONS = {
@@ -37,25 +37,19 @@ export interface Renderer {
   render(post: Post): Promise<{ png: Uint8Array; report: Report }>;
 }
 
-let renderer: Renderer | undefined;
+let renderer: Promise<Renderer> | undefined;
 
-/** The renderer, instantiated once per isolate. Font packs are read from `assets` on first use. */
-export function getRenderer(assets: Fetcher): Renderer {
-  if (renderer) return renderer;
+/** The renderer, loaded once per process. Font packs are read from the package on first use. */
+export function getRenderer(): Promise<Renderer> {
+  renderer ??= load();
+  return renderer;
+}
 
-  const wasm = loadXeetWasm();
-  const xeet = bind(wasm);
-  const fonts = createFontPacks({
-    manifest,
-    read: async (name) => {
-      const response = await assets.fetch(`https://assets.local/xeet-fonts/${name}.bin`);
-      if (!response.ok) throw new Error(`xeet font pack "${name}" is missing from assets (${response.status})`);
-      return new Uint8Array(await response.arrayBuffer());
-    },
-    hash: sha256Hex,
-    register: (file, bytes) => wasm.register_font(file, bytes),
-    missingPacks: (request) => wasm.missing_packs(request),
-  });
+async function load(): Promise<Renderer> {
+  const xeet = await loadXeet({ lazy: true });
+  // The package hides its package.json from imports, so it is read from next to its entry point.
+  const entry = createRequire(import.meta.url).resolve("@xeet/core/node");
+  const { version } = JSON.parse(readFileSync(join(dirname(entry), "..", "package.json"), "utf8")) as { version: string };
   const resolveOptions = (now: Date) => ({
     media: true,
     width: RENDER_OPTIONS.width,
@@ -63,16 +57,14 @@ export function getRenderer(assets: Fetcher): Renderer {
     surface: RENDER_OPTIONS.surface,
     now: now.toISOString(),
   });
-
-  renderer = {
-    version: XEET_VERSION,
+  return {
+    version,
     upstream: xeet.upstream,
     resolve: (url, now) => xeet.resolve(url, resolveOptions(now)),
     hydrate: (post, now) => xeet.resolve(JSON.stringify(post), resolveOptions(now)),
     async render(post) {
-      await fonts.ensure({ post, options: RENDER_OPTIONS });
+      await xeet.ensureFonts!({ post, options: RENDER_OPTIONS });
       return xeet.render(post, RENDER_OPTIONS);
     },
   };
-  return renderer;
 }

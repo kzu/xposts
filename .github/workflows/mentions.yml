@@ -1,0 +1,26 @@
+name: Mentions
+
+# Asks the site to answer the mentions of the bot account. Vercel's own cron
+# runs at most daily on the Hobby plan, so the schedule lives here.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll mentions
+        env:
+          XPOSTS_URL: ${{ secrets.XPOSTS_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$XPOSTS_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "XPOSTS_URL and CRON_SECRET are not set: nothing to do."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" "$XPOSTS_URL/api/cron/mentions"
