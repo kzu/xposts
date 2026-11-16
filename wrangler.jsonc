@@ -37,6 +37,7 @@
 
   "vars": {
     "PUBLIC_URL": "http://localhost:8787",
+    "REPO_URL": "https://github.com/kzu/xposts",
     "X_BOT_HANDLE": "SaveXPosts",
     "ALGORAND_NETWORK": "testnet"
   }

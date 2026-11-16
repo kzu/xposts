@@ -8,6 +8,8 @@ export interface Env {
 
   /** Origin the archive is served from, without a trailing slash. */
   PUBLIC_URL: string;
+  /** Where the source code of this deployment lives. */
+  REPO_URL: string;
 
   // Auth0 (regular web application). Sign-in is required to submit a post.
   AUTH0_DOMAIN?: string;
